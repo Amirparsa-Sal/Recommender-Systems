@@ -1,0 +1,4 @@
+[
+    {"model": "user_knn", "params": {"similarity": "cosine", "topk": 70, "shrink": 9}},
+    {"model": "item_knn", "params": {"similarity": "cosine", "topk": 70, "shrink": 9}}
+]

@@ -1,0 +1,6 @@
+[
+    {"model": "slim_elasticnet", "params": {"alpha": 0.002, "max_iter": 1000, "tol": 0.001, "l1_ratio": 0.005, "topk": 500}},
+    {"model": "slim_bpr", "params": {"epochs": 5, "lr": 0.1, "lambda_pos": 0.01, "lambda_neg": 0.01, "batch_size": 2048, "topk": 500}},
+    {"model": "rp3beta", "params": {"alpha": 0.8, "beta": 0.2, "topk": 300}},
+    {"model": "user_knn", "params": {"similarity": "cosine", "topk": 80, "shrink": 10}}    
+]

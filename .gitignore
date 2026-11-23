@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+submissions/
+results/
+*.pkl
+cache/
+data
+*.bak
