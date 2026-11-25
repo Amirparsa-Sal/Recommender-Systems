@@ -74,6 +74,8 @@ class CandidatePool:
         self.scores = np.zeros((len(self.normalizations), len(models), n_users, width), np.float32)
         self.valid = np.zeros((n_users, width), dtype=bool)
         self.relevant = np.zeros((n_users, width), dtype=bool)
+        self.users = users  # row of the training matrix of every pool row
+        self.items = np.zeros((n_users, width), dtype=np.int32)  # item id of every candidate column
         logger.info(
             "Candidate pool: %d users x %d candidates x %d components x %d normalisation(s) = %.0f MB",
             n_users, width, len(models), len(self.normalizations), self.scores.nbytes / 1e6,
@@ -104,6 +106,7 @@ class CandidatePool:
             held_out = validation[batch].toarray() > 0
 
             self.valid[start:stop] = valid
+            self.items[start:stop] = candidate_items
             self.relevant[start:stop] = np.take_along_axis(held_out, candidate_items, axis=1)
             for m, method in enumerate(self.normalizations):
                 for j, scores in enumerate(raw):
@@ -117,8 +120,8 @@ class CandidatePool:
         self._discounts = 1.0 / np.log2(np.arange(2, cutoff + 2))
         self._ideal_dcg = np.cumsum(self._discounts)[self._ideal_length - 1]
 
-    def evaluate(self, weights: Sequence[float], normalization: str) -> Tuple[float, float]:
-        """``(ndcg@cutoff, map@cutoff)`` of the blend with these weights."""
+    def per_user(self, weights: Sequence[float], normalization: str) -> Tuple[np.ndarray, np.ndarray]:
+        """Per-user ``(ndcg@cutoff, ap@cutoff)`` arrays of the blend with these weights."""
         if len(weights) != self.n_models:
             raise ValueError(f"Expected {self.n_models} weights, got {len(weights)}")
         m = self.normalizations.index(normalization)
@@ -143,7 +146,12 @@ class CandidatePool:
         dcg = (hits * self._discounts).sum(axis=1)
         precision_at_i = np.cumsum(hits, axis=1) / np.arange(1, k + 1)
         average_precision = (precision_at_i * hits).sum(axis=1) / self._ideal_length
-        return float(np.mean(dcg / self._ideal_dcg)), float(np.mean(average_precision))
+        return dcg / self._ideal_dcg, average_precision
+
+    def evaluate(self, weights: Sequence[float], normalization: str) -> Tuple[float, float]:
+        """``(ndcg@cutoff, map@cutoff)`` of the blend with these weights."""
+        ndcg, average_precision = self.per_user(weights, normalization)
+        return float(np.mean(ndcg)), float(np.mean(average_precision))
 
 
 # ----------------------------------------------------------------------------- searches

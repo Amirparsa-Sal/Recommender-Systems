@@ -15,7 +15,8 @@ import scipy.sparse as sp
 from recsys.config import config_from_dict
 from recsys.data import Dataset, SPLIT_MODES, random_holdout, restrict_to_users
 from recsys.metrics import evaluate_recommendations
-from recsys.models import create_model, get_model_class
+from recsys.models import get_model_class
+from recsys.models.hybrid import fit_cached
 from recsys.utils import Timer
 
 logger = logging.getLogger(__name__)
@@ -133,8 +134,14 @@ def run_comparison(
     options: EvaluationOptions,
     continue_on_error: bool = True,
     sort_by: Optional[str] = None,
+    cache_dir: str = "",
 ) -> pd.DataFrame:
-    """Train and evaluate every spec on the same split; one result row per spec."""
+    """Train and evaluate every spec on the same split; one result row per spec.
+
+    With ``cache_dir`` a model identical to one trained in an earlier run (same model,
+    hyper-parameters and split) is loaded from that folder instead of being trained again;
+    ``fit_s`` is then the loading time.
+    """
     cutoffs = sorted(options.cutoffs)
     sort_by = sort_by or f"ndcg@{cutoffs[-1]}"
     rows: List[Dict[str, Any]] = []
@@ -142,9 +149,8 @@ def run_comparison(
     for number, spec in enumerate(specs, start=1):
         logger.info("[%d/%d] %s: %s", number, len(specs), spec.label, spec.params or "default parameters")
         try:
-            model = create_model(spec.model, spec.params)
             with Timer() as fit_timer:
-                model.fit(split.train, validation=split.validation)
+                model = fit_cached(spec.model, spec.params, split.train, split.validation, cache_dir)
             with Timer() as recommend_timer:
                 recommendations = model.recommend(
                     split.users, k=cutoffs[-1], batch_size=options.rec_batch_size

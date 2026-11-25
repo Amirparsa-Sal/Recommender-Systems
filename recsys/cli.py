@@ -27,6 +27,7 @@ from recsys.experiment import (
 )
 from recsys.logging_utils import setup_logging
 from recsys.models import MODEL_REGISTRY
+from recsys.models.hybrid import fit_cached
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +77,14 @@ def add_evaluation_arguments(parser: argparse.ArgumentParser, with_defaults: boo
                        help="Write the results table to this CSV file")
 
 
+CACHE_DIR_HELP = ("Save the trained model in this folder and load it from there when an identical "
+                  "model (same hyper-parameters and data) was trained before. Empty = no caching")
+
+
 def resolve_evaluation_options(
     args: argparse.Namespace,
     file_options: Optional[Mapping[str, Any]] = None,
-    extra_keys: Iterable[str] = ("models", "sort_by"),
+    extra_keys: Iterable[str] = ("models", "sort_by", "cache_dir"),
 ) -> EvaluationOptions:
     """Merge command line flags (highest priority), a JSON mapping and the defaults.
 
@@ -120,7 +125,7 @@ def _run_evaluate(args: argparse.Namespace) -> None:
     split = make_split(dataset, options)
     spec = ModelSpec(args.model, config.to_dict(), args.model)
     results = run_comparison(
-        [spec], split, options, continue_on_error=False
+        [spec], split, options, continue_on_error=False, cache_dir=args.cache_dir
     )
     print("\n" + format_results(results))
     if options.output:
@@ -133,7 +138,7 @@ def _run_submit(args: argparse.Namespace) -> None:
     cls = MODEL_REGISTRY[args.model]
     config = config_from_namespace(cls.Config, args)
     dataset = load_dataset(args.data_dir)
-    model = cls(config).fit(dataset.urm)
+    model = fit_cached(args.model, config.to_dict(), dataset.urm, None, args.cache_dir)
     recommendations = model.recommend(
         dataset.target_users, k=args.k, batch_size=args.rec_batch_size
     )
@@ -174,6 +179,10 @@ def build_parser() -> argparse.ArgumentParser:
             name, help=description, description=description, parents=[_verbosity_parent()]
         )
         add_evaluation_arguments(eval_parser)
+        has_own_cache_flag = "cache_dir" in cls.Config.__dataclass_fields__  # hybrids
+        if not has_own_cache_flag:
+            eval_parser.add_argument_group("model cache").add_argument(
+                "--cache-dir", default="", help=CACHE_DIR_HELP + " (default: off)")
         add_config_arguments(eval_parser.add_argument_group(f"{name} hyper-parameters"), cls.Config)
         eval_parser.set_defaults(handler=_run_evaluate)
 
@@ -191,6 +200,8 @@ def build_parser() -> argparse.ArgumentParser:
                                   help="Users scored at once (default: %(default)s)")
         submit_group.add_argument("--save-model", default=None,
                                   help="Also pickle the trained model to this path")
+        if not has_own_cache_flag:
+            submit_group.add_argument("--cache-dir", default="", help=CACHE_DIR_HELP + " (default: off)")
         add_config_arguments(submit_parser.add_argument_group(f"{name} hyper-parameters"), cls.Config)
         submit_parser.set_defaults(handler=_run_submit)
     return parser

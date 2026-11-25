@@ -80,6 +80,11 @@ def parse_components(raw: Any) -> List[ComponentSpec]:
     return specs
 
 
+# Parameters that only say *where / how fast* a model is trained and do not change the result:
+# they are left out of the cache key, so e.g. a network trained with --device mps is found
+# again by a run that says --device cpu.
+_RUNTIME_ONLY_PARAMS = ("device", "num_threads")
+
 _FIT_CACHE: "OrderedDict[tuple, Recommender]" = OrderedDict()
 FIT_CACHE_SIZE = 8
 
@@ -107,8 +112,12 @@ def fit_component(
     seen: Optional[sp.csr_matrix] = None,
     use_cache: bool = True,
     cache_dir: str = "",
+    memory: bool = True,
 ) -> Recommender:
     """Train one component, reusing an identical already trained model if cached.
+
+    ``memory=False`` skips the in-memory cache and only uses the on-disk one (for a
+    single big model nobody will ask for again within the same run).
 
     Trained models are cached in memory and, when ``cache_dir`` is given, also on disk
     (pickle files named after the model and a hash of its hyper-parameters and data), so
@@ -118,14 +127,15 @@ def fit_component(
     model = create_model(spec.model, spec.params)
     key = path = None
     if use_cache:
+        cache_params = {k: v for k, v in model.config.to_dict().items() if k not in _RUNTIME_ONLY_PARAMS}
         key = (
             spec.model,
-            json.dumps(model.config.to_dict(), sort_keys=True),
+            json.dumps(cache_params, sort_keys=True),
             _fingerprint(urm),
             _fingerprint(validation),
             _fingerprint(seen),
         )
-        if key in _FIT_CACHE:
+        if memory and key in _FIT_CACHE:
             _FIT_CACHE.move_to_end(key)
             logger.info("Component %s: reusing the cached trained model", spec.model)
             return _FIT_CACHE[key]
@@ -135,15 +145,42 @@ def fit_component(
             loaded = _load_model(path)
             if loaded is not None:
                 logger.info("Component %s: loaded the trained model from %s", spec.model, path)
-                _remember(key, loaded)
+                if memory:
+                    _remember(key, loaded)
                 return loaded
     logger.info("Training component %s %s", spec.model, spec.params or "")
     model.fit(urm, validation=validation, seen=seen)
-    if key is not None:
+    if key is not None and memory:
         _remember(key, model)
     if path is not None:
         _save_model(model, path)
     return model
+
+
+def fit_cached(
+    name: str,
+    params: dict,
+    urm: sp.csr_matrix,
+    validation: Optional[sp.csr_matrix] = None,
+    cache_dir: str = "",
+) -> Recommender:
+    """Train any model, loading it from ``cache_dir`` when an identical one was saved before.
+
+    Used by ``main.py evaluate / submit`` and ``evaluate.py`` for their ``--cache-dir`` flag.
+    The cache key is the model, its full hyper-parameters, and the training and validation
+    matrices, so changing any of them trains again.  A hybrid is not pickled as a whole (that
+    would store every component a second time): the folder is handed to its own
+    ``cache_dir`` parameter instead, so its components are cached one by one.
+    """
+    model = create_model(name, params)
+    if not cache_dir:
+        return model.fit(urm, validation=validation)
+    if hasattr(model.config, "cache_dir"):  # a hybrid
+        if not model.config.cache_dir:
+            model = create_model(name, {**params, "cache_dir": cache_dir})
+        return model.fit(urm, validation=validation)
+    return fit_component(ComponentSpec(name, dict(params)), urm, validation,
+                         cache_dir=cache_dir, memory=False)
 
 
 def _remember(key: tuple, model: Recommender) -> None:

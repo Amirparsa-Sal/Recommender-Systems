@@ -1,0 +1,35 @@
+{
+  "data_dir": "data",
+  "validation_fraction": 0.2,
+  "split_mode": "global",
+  "split_seed": 42,
+  "cutoffs": [20],
+  "cache_dir": "cache",
+
+  "normalize": ["max", "zscore"],
+  "candidates": 100,
+  "weight_steps": 9,
+  "out_dir": "results/analysis_bests",
+
+  "components": [
+    {"model": "slim_elasticnet", "label": "slim",
+     "params": {"alpha": 0.003, "max_iter": 1000, "tol": 0.001, "l1_ratio": 0.001, "topk": 500}},
+    {"model": "slim_bpr", "label": "slim_bpr",
+     "params": {"epochs": 5, "lr": 0.1, "lambda_pos": 0.01, "lambda_neg": 0.01, "batch_size": 2048, "topk": 500}},
+    {"model": "rp3beta", "label": "rp3beta",
+     "params": {"alpha": 0.8, "beta": 0.2, "topk": 300}},
+    {"model": "user_knn", "label": "user_knn",
+     "params": {"similarity": "cosine", "topk": 80, "shrink": 10}},
+    {"model": "item_knn", "label": "item_knn",
+     "params": {"similarity": "cosine", "topk": 90, "shrink": 100}},
+    {"model": "rwr", "label": "rwr",
+     "params": {"damping": 0.2, "iterations": 10}},
+    {"model": "p3alpha", "label": "p3alpha",
+     "params": {"alpha": 0.8, "topk": 200}},
+    {"model": "bpr_mf", "label": "bpr_mf",
+     "params": {"lambda_neg": 0.01, "lambda_pos": 0.01, "lambda_user": 0.01, "factors": 256, "lr": 0.05, "batch_size": 2048, "epochs": 55}},
+    {"model": "ease", "label": "ease", "params": {"l2": 100, "min_item_interactions": 5, "topk": 0}},
+    {"model": "autoencoder", "label": "AE", "params": {"lr": 0.003, "hidden_dims": [30], "epochs": 100, "patience": 10}},
+    {"model": "mult_vae", "label": "Mult-VAE", "params": {"lr": 0.003, "hidden_dims": [30], "epochs": 100, "patience": 10}}
+  ]
+}

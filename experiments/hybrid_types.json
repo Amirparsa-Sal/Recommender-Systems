@@ -1,0 +1,158 @@
+{
+  "data_dir": "data",
+  "validation_fraction": 0.2,
+  "split_mode": "global",
+  "split_seed": 42,
+  "cutoffs": [
+    20
+  ],
+  "sort_by": "ndcg@20",
+  "models": [
+    {
+      "model": "hybrid_linear",
+      "label": "linear",
+      "params": {
+        "components": [
+          {
+            "model": "slim_elasticnet",
+            "params": {
+              "alpha": 0.003,
+              "max_iter": 1000,
+              "tol": 0.001,
+              "l1_ratio": 0.001,
+              "topk": 500
+            }
+          },
+          {
+            "model": "rp3beta",
+            "params": {
+              "alpha": 0.8,
+              "beta": 0.2,
+              "topk": 300
+            }
+          }
+        ],
+        "cache_dir": "cache"
+      },
+      "grid": {
+        "weights": [
+          [
+            0.7,
+            0.3
+          ],
+          [
+            0.6,
+            0.4
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ],
+        "normalize": [
+          "max",
+          "zscore"
+        ]
+      }
+    },
+    {
+      "model": "hybrid_merge",
+      "label": "merge",
+      "params": {
+        "components": [
+          {
+            "model": "slim_elasticnet",
+            "params": {
+              "alpha": 0.003,
+              "max_iter": 1000,
+              "tol": 0.001,
+              "l1_ratio": 0.001,
+              "topk": 500
+            }
+          },
+          {
+            "model": "rp3beta",
+            "params": {
+              "alpha": 0.8,
+              "beta": 0.2,
+              "topk": 300
+            }
+          }
+        ],
+        "cache_dir": "cache"
+      },
+      "grid": {
+        "weights": [
+          [
+            0.7,
+            0.3
+          ],
+          [
+            0.6,
+            0.4
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ],
+        "normalize": [
+          "max",
+          "mean"
+        ],
+        "topk": [
+          0,
+          500
+        ]
+      }
+    },
+    {
+      "model": "hybrid_list",
+      "label": "list",
+      "params": {
+        "components": [
+          {
+            "model": "slim_elasticnet",
+            "params": {
+              "alpha": 0.003,
+              "max_iter": 1000,
+              "tol": 0.001,
+              "l1_ratio": 0.001,
+              "topk": 500
+            }
+          },
+          {
+            "model": "rp3beta",
+            "params": {
+              "alpha": 0.8,
+              "beta": 0.2,
+              "topk": 300
+            }
+          }
+        ],
+        "cache_dir": "cache"
+      },
+      "grid": {
+        "weights": [
+          [
+            0.7,
+            0.3
+          ],
+          [
+            0.6,
+            0.4
+          ],
+          [
+            0.5,
+            0.5
+          ]
+        ],
+        "method": [
+          "round_robin",
+          "borda",
+          "rrf"
+        ]
+      }
+    }
+  ]
+}

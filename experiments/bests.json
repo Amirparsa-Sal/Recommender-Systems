@@ -30,5 +30,7 @@
     },
     {"model": "user_knn", "params": {"similarity": "cosine", "topk": 80, "shrink": 10}},
     {"model": "item_knn", "params": {"similarity": "cosine", "topk": 90, "shrink": 100}},
-    {"model": "rwr", "params": {"damping": 0.2, "iterations": 10}}
+    {"model": "rwr", "params": {"damping": 0.2, "iterations": 10}},
+    {"model": "p3alpha", "params": {"alpha": 0.8, "topk": 200}},
+    {"model": "mf_bpr", "params": {"lambda_neg": 0.01, "lambda_pos": 0.01, "lambda_user": 0.01, "factors": 256, "lr": 0.05, "batch_size": 2048, "epochs": 55}}
   ]

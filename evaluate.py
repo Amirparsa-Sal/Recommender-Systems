@@ -13,7 +13,7 @@ import json
 import logging
 from pathlib import Path
 
-from recsys.cli import add_evaluation_arguments, resolve_evaluation_options
+from recsys.cli import CACHE_DIR_HELP, add_evaluation_arguments, resolve_evaluation_options
 from recsys.data import load_dataset
 from recsys.experiment import expand_specs, format_results, make_split, run_comparison
 from recsys.logging_utils import setup_logging
@@ -35,6 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Metric used to sort the table (default: ndcg@<largest cutoff>)")
     parser.add_argument("--fail-fast", action="store_true",
                         help="Stop at the first model that raises an error (default: record it and continue)")
+    parser.add_argument("--cache-dir", default=None,
+                        help=CACHE_DIR_HELP + " (also the \"cache_dir\" key of the JSON file; default: off)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show debug logging")
     add_evaluation_arguments(parser, with_defaults=False)
     return parser
@@ -62,6 +64,7 @@ def main() -> None:
         specs, split, options,
         continue_on_error=not args.fail_fast,
         sort_by=args.sort_by or file_config.get("sort_by"),
+        cache_dir=args.cache_dir if args.cache_dir is not None else file_config.get("cache_dir", ""),
     )
 
     print("\n" + format_results(results))

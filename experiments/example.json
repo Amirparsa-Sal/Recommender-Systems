@@ -3,52 +3,427 @@
   "validation_fraction": 0.2,
   "split_mode": "global",
   "split_seed": 42,
-  "cutoffs": [20],
+  "cutoffs": [
+    20
+  ],
   "sort_by": "ndcg@20",
   "models": [
-    {"model": "top_popular"},
-
-    {"model": "item_knn", "label": "item_knn cosine", "params": {"similarity": "cosine", "topk": 100, "shrink": 10}},
-    {"model": "item_knn", "label": "item_knn", "grid": {"similarity": ["cosine", "jaccard", "tversky"], "topk": [50, 200]}, "params": {"shrink": 10, "tversky_alpha": 0.5, "tversky_beta": 1.0}},
-    {"model": "user_knn", "params": {"similarity": "cosine", "topk": 200, "shrink": 10}},
-
-    {"model": "slim_elasticnet", "label": "slim elasticnet", "params": {"penalty": "elasticnet", "alpha": 1e-4, "l1_ratio": 0.1, "n_jobs": -1}},
-    {"model": "slim_elasticnet", "label": "slim lasso", "params": {"penalty": "lasso", "alpha": 1e-5, "n_jobs": -1}},
-    {"model": "slim_elasticnet", "label": "slim ridge", "params": {"penalty": "ridge", "alpha": 1e-4, "n_jobs": -1}},
-
-    {"model": "slim_bpr", "label": "slim_bpr", "params": {"loss": "bpr", "epochs": 30, "lr": 0.01, "eval_every": 5, "patience": 3}},
-    {"model": "slim_bpr", "label": "slim_bpr warp", "params": {"loss": "warp", "epochs": 30, "lr": 0.01, "eval_every": 5, "patience": 3}},
-
-    {"model": "mf_als", "params": {"factors": 64, "regularization": 10, "iterations": 15}},
-    {"model": "funk_svd", "label": "funk_svd neg-sampling", "params": {"missing": "negative_sampling", "factors": 32, "epochs": 60, "eval_every": 2, "patience": 3}},
-    {"model": "funk_svd", "label": "funk_svd missing-as-random", "params": {"missing": "random", "factors": 32}},
-    {"model": "funk_svd", "label": "funk_svd incremental+bias", "params": {"incremental": true, "global_effects": true, "factors": 16, "epochs": 20, "eval_every": 2, "patience": 2, "factor_patience": 3}},
-    {"model": "asymmetric_svd", "params": {"factors": 32, "epochs": 60, "eval_every": 2, "patience": 3}},
-    {"model": "asymmetric_svd", "label": "asymmetric_svd +global effects", "params": {"factors": 32, "epochs": 20, "global_effects": true}},
-
-    {"model": "random_walk", "label": "random_walk", "grid": {"hops": [3, 5]}},
-    {"model": "rwr", "params": {"damping": 0.7, "iterations": 10}},
-    {"model": "p3alpha", "params": {"alpha": 1.0, "topk": 100}},
-    {"model": "rp3beta", "label": "rp3beta", "grid": {"beta": [0.3, 0.6, 0.9]}, "params": {"alpha": 1.0, "topk": 100}},
-
-    {"model": "hybrid_linear", "label": "hybrid_linear knn+rp3beta+slim",
-     "params": {"normalize": "max", "components": [
-        {"model": "item_knn", "params": {"similarity": "cosine", "topk": 100, "shrink": 10}},
-        {"model": "rp3beta", "params": {"alpha": 0.7, "beta": 0.3, "topk": 100}},
-        {"model": "slim_elasticnet", "params": {"alpha": 1e-4, "l1_ratio": 0.1, "n_jobs": -1}}]},
-     "grid": {"weights": [[1, 1, 1], [1, 0.5, 0.5], [1, 0.5, 1], [0.5, 1, 1]]}},
-    {"model": "hybrid_list", "label": "hybrid_list round-robin",
-     "params": {"method": "round_robin", "components": ["item_knn", "rp3beta", "slim_elasticnet"]}},
-    {"model": "hybrid_merge", "label": "hybrid_merge knn+rp3beta",
-     "params": {"normalize": "max", "topk": 100, "weights": [0.6, 0.4], "components": [
-        {"model": "item_knn", "params": {"topk": 100, "shrink": 10}},
-        {"model": "rp3beta", "params": {"alpha": 0.7, "beta": 0.3, "topk": 100}}]}},
-    {"model": "hybrid_pipeline", "label": "hybrid_pipeline knn->rp3beta",
-     "params": {"top_n": 5, "use_scores": true, "components": [
-        {"model": "item_knn", "params": {"topk": 100, "shrink": 10}},
-        {"model": "rp3beta", "params": {"alpha": 0.7, "beta": 0.3, "topk": 100}}]}},
-
-    {"model": "bpr_mf", "label": "bpr_mf", "params": {"factors": 64, "epochs": 100, "loss": "bpr", "eval_every": 5, "patience": 3}},
-    {"model": "bpr_mf", "label": "bpr_mf warp", "params": {"factors": 64, "epochs": 100, "loss": "warp", "eval_every": 5, "patience": 3}}
+    {
+      "model": "top_popular"
+    },
+    {
+      "model": "item_knn",
+      "label": "item_knn cosine",
+      "params": {
+        "similarity": "cosine",
+        "topk": 100,
+        "shrink": 10
+      }
+    },
+    {
+      "model": "item_knn",
+      "label": "item_knn",
+      "grid": {
+        "similarity": [
+          "cosine",
+          "jaccard",
+          "tversky"
+        ],
+        "topk": [
+          50,
+          200
+        ]
+      },
+      "params": {
+        "shrink": 10,
+        "tversky_alpha": 0.5,
+        "tversky_beta": 1.0
+      }
+    },
+    {
+      "model": "user_knn",
+      "params": {
+        "similarity": "cosine",
+        "topk": 200,
+        "shrink": 10
+      }
+    },
+    {
+      "model": "slim_elasticnet",
+      "label": "slim elasticnet",
+      "params": {
+        "penalty": "elasticnet",
+        "alpha": 0.0001,
+        "l1_ratio": 0.1,
+        "n_jobs": -1
+      }
+    },
+    {
+      "model": "slim_elasticnet",
+      "label": "slim lasso",
+      "params": {
+        "penalty": "lasso",
+        "alpha": 1e-05,
+        "n_jobs": -1
+      }
+    },
+    {
+      "model": "slim_elasticnet",
+      "label": "slim ridge",
+      "params": {
+        "penalty": "ridge",
+        "alpha": 0.0001,
+        "n_jobs": -1
+      }
+    },
+    {
+      "model": "slim_bpr",
+      "label": "slim_bpr",
+      "params": {
+        "loss": "bpr",
+        "epochs": 30,
+        "lr": 0.01,
+        "eval_every": 5,
+        "patience": 3
+      }
+    },
+    {
+      "model": "slim_bpr",
+      "label": "slim_bpr warp",
+      "params": {
+        "loss": "warp",
+        "epochs": 30,
+        "lr": 0.01,
+        "eval_every": 5,
+        "patience": 3
+      }
+    },
+    {
+      "model": "mf_als",
+      "params": {
+        "factors": 64,
+        "regularization": 10,
+        "iterations": 15
+      }
+    },
+    {
+      "model": "funk_svd",
+      "label": "funk_svd neg-sampling",
+      "params": {
+        "missing": "negative_sampling",
+        "factors": 32,
+        "epochs": 60,
+        "eval_every": 2,
+        "patience": 3
+      }
+    },
+    {
+      "model": "funk_svd",
+      "label": "funk_svd missing-as-random",
+      "params": {
+        "missing": "random",
+        "factors": 32
+      }
+    },
+    {
+      "model": "funk_svd",
+      "label": "funk_svd incremental+bias",
+      "params": {
+        "incremental": true,
+        "global_effects": true,
+        "factors": 16,
+        "epochs": 20,
+        "eval_every": 2,
+        "patience": 2,
+        "factor_patience": 3
+      }
+    },
+    {
+      "model": "asymmetric_svd",
+      "params": {
+        "factors": 32,
+        "epochs": 60,
+        "eval_every": 2,
+        "patience": 3
+      }
+    },
+    {
+      "model": "asymmetric_svd",
+      "label": "asymmetric_svd +global effects",
+      "params": {
+        "factors": 32,
+        "epochs": 20,
+        "global_effects": true
+      }
+    },
+    {
+      "model": "random_walk",
+      "label": "random_walk",
+      "grid": {
+        "hops": [
+          3,
+          5
+        ]
+      }
+    },
+    {
+      "model": "rwr",
+      "params": {
+        "damping": 0.7,
+        "iterations": 10
+      }
+    },
+    {
+      "model": "p3alpha",
+      "params": {
+        "alpha": 1.0,
+        "topk": 100
+      }
+    },
+    {
+      "model": "rp3beta",
+      "label": "rp3beta",
+      "grid": {
+        "beta": [
+          0.3,
+          0.6,
+          0.9
+        ]
+      },
+      "params": {
+        "alpha": 1.0,
+        "topk": 100
+      }
+    },
+    {
+      "model": "hybrid_linear",
+      "label": "hybrid_linear knn+rp3beta+slim",
+      "params": {
+        "normalize": "max",
+        "components": [
+          {
+            "model": "item_knn",
+            "params": {
+              "similarity": "cosine",
+              "topk": 100,
+              "shrink": 10
+            }
+          },
+          {
+            "model": "rp3beta",
+            "params": {
+              "alpha": 0.7,
+              "beta": 0.3,
+              "topk": 100
+            }
+          },
+          {
+            "model": "slim_elasticnet",
+            "params": {
+              "alpha": 0.0001,
+              "l1_ratio": 0.1,
+              "n_jobs": -1
+            }
+          }
+        ]
+      },
+      "grid": {
+        "weights": [
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            1,
+            0.5,
+            0.5
+          ],
+          [
+            1,
+            0.5,
+            1
+          ],
+          [
+            0.5,
+            1,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "model": "hybrid_list",
+      "label": "hybrid_list round-robin",
+      "params": {
+        "method": "round_robin",
+        "components": [
+          "item_knn",
+          "rp3beta",
+          "slim_elasticnet"
+        ]
+      }
+    },
+    {
+      "model": "hybrid_merge",
+      "label": "hybrid_merge knn+rp3beta",
+      "params": {
+        "normalize": "max",
+        "topk": 100,
+        "weights": [
+          0.6,
+          0.4
+        ],
+        "components": [
+          {
+            "model": "item_knn",
+            "params": {
+              "topk": 100,
+              "shrink": 10
+            }
+          },
+          {
+            "model": "rp3beta",
+            "params": {
+              "alpha": 0.7,
+              "beta": 0.3,
+              "topk": 100
+            }
+          }
+        ]
+      }
+    },
+    {
+      "model": "hybrid_pipeline",
+      "label": "hybrid_pipeline knn->rp3beta",
+      "params": {
+        "top_n": 5,
+        "use_scores": true,
+        "components": [
+          {
+            "model": "item_knn",
+            "params": {
+              "topk": 100,
+              "shrink": 10
+            }
+          },
+          {
+            "model": "rp3beta",
+            "params": {
+              "alpha": 0.7,
+              "beta": 0.3,
+              "topk": 100
+            }
+          }
+        ]
+      }
+    },
+    {
+      "model": "bpr_mf",
+      "label": "bpr_mf",
+      "params": {
+        "factors": 64,
+        "epochs": 100,
+        "loss": "bpr",
+        "eval_every": 5,
+        "patience": 3
+      }
+    },
+    {
+      "model": "bpr_mf",
+      "label": "bpr_mf warp",
+      "params": {
+        "factors": 64,
+        "epochs": 100,
+        "loss": "warp",
+        "eval_every": 5,
+        "patience": 3
+      }
+    },
+    {
+      "model": "ease",
+      "label": "ease",
+      "params": {
+        "l2": 100,
+        "min_item_interactions": 5
+      }
+    },
+    {
+      "model": "ease",
+      "label": "ease topk",
+      "params": {
+        "l2": 100,
+        "min_item_interactions": 5,
+        "topk": 500
+      }
+    },
+    {
+      "model": "autoencoder",
+      "label": "autoencoder shallow",
+      "params": {
+        "device": "cpu",
+        "num_threads": 0,
+        "eval_every": 1,
+        "patience": 5,
+        "hidden_dims": [
+          600
+        ],
+        "epochs": 50,
+        "lr": 0.001,
+        "loss": "bce",
+        "activation": "relu"
+      }
+    },
+    {
+      "model": "autoencoder",
+      "label": "autoencoder deep tied",
+      "params": {
+        "device": "cpu",
+        "num_threads": 0,
+        "eval_every": 1,
+        "patience": 5,
+        "hidden_dims": [
+          600,
+          200
+        ],
+        "tied_weights": true,
+        "epochs": 50,
+        "lr": 0.001
+      }
+    },
+    {
+      "model": "denoising_ae",
+      "label": "denoising_ae",
+      "params": {
+        "device": "cpu",
+        "num_threads": 0,
+        "eval_every": 1,
+        "patience": 5,
+        "hidden_dims": [
+          600
+        ],
+        "epochs": 50,
+        "noise_dropout": 0.5,
+        "noise_add": 0.0001
+      }
+    },
+    {
+      "model": "mult_vae",
+      "label": "mult_vae",
+      "params": {
+        "device": "cpu",
+        "num_threads": 0,
+        "eval_every": 1,
+        "patience": 5,
+        "hidden_dims": [
+          600
+        ],
+        "latent_dim": 200,
+        "epochs": 50,
+        "beta": 0.2,
+        "anneal_steps": 2000,
+        "noise_dropout": 0.5
+      }
+    }
   ]
 }

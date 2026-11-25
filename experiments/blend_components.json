@@ -10,6 +10,23 @@
     }
   },
   {
+    "model": "ease",
+    "params": {
+      "l2": 100,
+      "min-item-interactions": 5,
+      "topk": 0
+    }
+  },
+  {
+    "model": "rp3beta",
+    "params": {
+      "alpha": 0.8,
+      "beta": 0.2,
+      "topk": 300
+    }
+  },
+  {"model": "mult_vae", "params": {"lr": 0.003, "hidden_dims": [30], "epochs": 100, "patience": 10}},
+  {
     "model": "slim_bpr",
     "params": {
       "epochs": 5,
@@ -20,12 +37,4 @@
       "topk": 500
     }
   },
-  {
-    "model": "rp3beta",
-    "params": {
-      "alpha": 0.8,
-      "beta": 0.2,
-      "topk": 300
-    }
-  }
 ]

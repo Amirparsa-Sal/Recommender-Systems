@@ -6,15 +6,27 @@
   "cache_dir": "cache",
 
   "components": [
-    {"model": "slim_elasticnet", "label": "slim", "weights": [1],
-     "params": {"alpha": 0.003, "max_iter": 1000, "tol": 0.001, "l1_ratio": 0.001, "topk": 500}},
-    {"model": "slim_bpr", "label": "slim_bpr",
-     "params": {"epochs": 5, "lr": 0.1, "lambda_pos": 0.01, "lambda_neg": 0.01, "batch_size": 2048, "topk": 500}},
-    {"model": "rp3beta", "label": "rp3beta", "params": {"alpha": 0.8, "beta": 0.2, "topk": 300}}
+    {"model": "slim_elasticnet", "label": "slim", "params": {"alpha": 0.003, "max_iter": 1000, "tol": 0.001, "l1_ratio": 0.001, "topk": 500}},
+
+    {"model": "rwr", "label": "rwr", "params": {"damping": 0.2, "iterations": 10}},
+    {"model": "autoencoder", "label": "AE", "params": {"lr": 0.003, "hidden_dims": [30], "epochs": 100, "patience": 10, "device": "mps"}},
+    {"model": "mult_vae", "label": "Mult-VAE", "params": {"lr": 0.003, "hidden_dims": [30], "epochs": 100, "patience": 10, "device": "mps"}},
+    {
+      "model": "slim_bpr",
+      "label": "slim_bpr",
+      "params": {
+        "epochs": 5,
+        "lr": 0.1,
+        "lambda_pos": 0.01,
+        "lambda_neg": 0.01,
+        "batch_size": 2048,
+        "topk": 500
+      }
+    }
   ],
 
   "weight_values": [0, 0.1, 0.2, 0.3, 0.5],
   "normalize": ["max", "zscore"],
   "strategy": "grid",
-  "top": 15
+  "top": 40
 }
