@@ -424,6 +424,27 @@
         "anneal_steps": 2000,
         "noise_dropout": 0.5
       }
+    },
+    {
+      "model": "gfcf",
+      "label": "gfcf"
+    },
+    {
+      "model": "gfcf",
+      "label": "gfcf paper defaults",
+      "params": {
+        "n_factors": 256,
+        "alpha": 0.3,
+        "user_exponent": 0.5,
+        "item_exponent": 0.5
+      }
+    },
+    {
+      "model": "gfcf",
+      "label": "gfcf topk",
+      "params": {
+        "topk": 1000
+      }
     }
   ]
 }

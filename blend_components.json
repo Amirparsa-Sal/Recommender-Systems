@@ -10,20 +10,13 @@
     }
   },
   {
-    "model": "rwr",
-    "params": {
-      "damping": 0.2,
-      "iterations": 10
-    }
-  },
-  {
     "model": "autoencoder",
     "params": {
       "lr": 0.003,
       "hidden_dims": [
         30
       ],
-      "epochs": 75,
+      "epochs": 100,
       "patience": 10,
       "device": "mps"
     }
@@ -35,20 +28,20 @@
       "hidden_dims": [
         30
       ],
-      "epochs": 65,
+      "epochs": 100,
       "patience": 10,
       "device": "mps"
     }
   },
   {
-    "model": "slim_bpr",
+    "model": "gfcf",
+    "params": {}
+  },
+  {
+    "model": "rwr",
     "params": {
-      "epochs": 5,
-      "lr": 0.1,
-      "lambda_pos": 0.01,
-      "lambda_neg": 0.01,
-      "batch_size": 2048,
-      "topk": 500
+      "damping": 0.2,
+      "iterations": 10
     }
   }
 ]
