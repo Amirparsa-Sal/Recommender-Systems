@@ -14,6 +14,7 @@ features – and implements the methods of the course slides.
 ```bash
 pip install -r requirements.txt        # numpy, scipy, pandas, scikit-learn, joblib
 pip install torch                      # only for autoencoder / denoising_ae / mult_vae / lightgcn
+pip install xgboost                    # only for stack_ranker.py (the learned ranker)
 ```
 
 PyTorch is imported lazily: the rest of the project (including `ease`) works without it.
@@ -30,6 +31,7 @@ main.py                  CLI: list-models / evaluate / submit
 evaluate.py              compare many models or configs on the same split
 tune_blend.py            search the weights / subset of components of a hybrid_linear blend
 tune_gated_blend.py      do weights that depend on the profile length of the user beat one global blend? (hybrid_gated)
+stack_ranker.py          XGBoost ranker that re-orders the candidates of several models (stacking): cv, then submit
 analyze_models.py        which components agree / disagree usefully, and which pairs blend well (plots + CSV)
 experiments/example.json example comparison file (every model and variant)
 experiments/tune_blend.json example weight search for a blend
@@ -44,6 +46,7 @@ recsys/
   optim.py               sparse SGD / Adagrad updates
   experiment.py          split building, running and comparing models
   blend_search.py        fast weight search for linear blends (used by tune_blend.py, tune_gated_blend.py)
+  stacking.py            candidates, features and XGBoost ranker (used by stack_ranker.py)
   cli.py                 argparse CLI (one sub-command per model, generated automatically)
   models/                one file per model family (see below; graph.py = graph-based models, hybrid.py = hybrids)
 ```
@@ -657,6 +660,75 @@ default `max zscore`). Users without training interactions are left out. A gain 
 standard errors (`gain_vs_noise` in `pairs.csv`) is not distinguishable from noise, and the
 weights are picked on the same validation users, so confirm a promising pair with another
 `--split-seed` and `tune_blend.py`.
+
+#### A learned ranker on top of the components: `stack_ranker.py`
+
+A blend applies one fixed weight vector to the scores of the components. A *ranker* learns from
+examples how to combine them, per user and per item. The components propose candidates (the top
+`--candidates` items of each, 50 by default), every (user, candidate) pair is described by features,
+and XGBoost learns to order each user's candidates so that the held-out interactions come first.
+By default it classifies every pair as relevant or not (`binary:logistic`); `--objective rank:ndcg` is
+LambdaMART instead, whose gradients are weighted by how much NDCG changes when two items swap, so
+mistakes near the top of the list matter most. In our test the two were within about 0.001 NDCG@20
+of each other (the classifier slightly ahead), so compare both on your own components.
+
+Features of a pair: for every component its score divided by the user's best score, z-score and
+rank (with `--raw-scores` also the raw score and the user's best raw score, see below); agreement
+features (in how many top-20 lists, reciprocal-rank fusion, a plain blend, best / worst / mean
+rank, spread); item features (popularity, popularity percentile, how active its users are); user
+features (profile length, how popular the profile's items are, item popularity relative to that).
+
+It takes the same `--config` / `--components` as the tuning scripts (so
+`experiments/analyze_bests.json` works unchanged) and the same `--cache-dir`: the components that
+`analyze_models.py` / `tune_blend.py` trained on the validation split are loaded, not trained again.
+
+```bash
+# 1. evaluate (out of sample) and train the final ranker; writes results/ranker/
+python3 stack_ranker.py cv --config experiments/analyze_bests.json
+# 2. components retrained on all the data (through the cache) + the saved ranker -> submission
+python3 stack_ranker.py submit --config experiments/analyze_bests.json --output submissions/ranker.csv
+```
+
+`cv` is honest: the components never saw the validation interactions that give the labels, and the
+validation users are split in folds so a user is only scored by a ranker that was trained on other
+users. The number of trees of a fold is chosen on a slice (`--inner-fraction`, 20%) of that fold's
+*training* users, never on the users being scored. It prints the single components, the plain blend, reciprocal-rank fusion
+and the ranker on the same candidates, the paired differences with standard errors, a breakdown by
+profile length, the most useful features, the candidate recall (the ceiling: the ranker can only
+re-order candidates) and an exact check through the real metric. Settings are the ranker flags (see
+`--help`) or the `"ranker"` object of the JSON file:
+
+```json
+"ranker": {"candidates": 100, "max_depth": 5, "blend_weights": [0.1, 0.3, 0.2, 0.4]}
+```
+
+Put the weights found by `tune_blend.py` in `blend_weights`: the ranker then gets the best blend as
+a feature and starts from it. Other useful knobs: `--candidates` (more = higher ceiling, more rows),
+`--objective rank:ndcg` (alternative to the default `binary:logistic`), `--max-depth`, `--learning-rate`,
+`--min-child-weight`, `--raw-scores`, `--n-jobs`.
+
+Things to know:
+
+- The components of `submit` are trained on all the data, so they are a little stronger than the
+  ones the ranker was trained with. The count features (profile length, item popularity) are
+  scaled by `1 - validation_fraction` to stay on the same scale, and raw scores are left out by
+  default (`--raw-scores` adds them): they were worth about 0.0003 NDCG@20 in our test (noise) but
+  shift when the components see more data. `submit` prints which feature means moved most (in
+  training standard deviations) and warns above 0.3.
+- XGBoost always runs in its own Python process (training and prediction). On macOS it can crash with
+  a segmentation fault when PyTorch, which the neural components load while scoring, is in the same
+  process (the two bring different OpenMP runtimes). The worker takes the data through temporary
+  files, so expect a few seconds of disk I/O; if it still crashes you get an error message instead
+  of a dead run (try `--n-jobs 1` and update `xgboost`).
+- Changing the components or the feature options requires running `cv` again (the saved ranker
+  checks that the feature names match).
+- Components that use the validation set for early stopping (`bpr_mf`, `slim_bpr`, the neural
+  models) pick only their number of epochs on it; the effect on the labels is negligible but it is
+  there.
+- The gain is relative to the components: expect it to be largest when the components disagree
+  usefully (use `analyze_models.py`), and smaller when most candidates come from one dominant model.
+- Memory is about 4 bytes x rows x features, with rows = users x candidates per user (about 120
+  per user with 4 components and `--candidates 50`).
 
 ### What is not included, and why
 

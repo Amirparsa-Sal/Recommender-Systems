@@ -6,3 +6,6 @@ joblib>=1.2
 
 # Optional, only for the neural models (autoencoder, denoising_ae, mult_vae, lightgcn):
 # torch>=2.0
+
+# Optional, only for the learned ranker (stack_ranker.py):
+# xgboost>=2.0

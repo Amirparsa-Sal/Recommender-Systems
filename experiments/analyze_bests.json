@@ -24,6 +24,6 @@
     {"model": "autoencoder", "label": "AE", "params": {"lr": 0.003, "hidden_dims": [30], "epochs": 75, "patience": 10}},
     {"model": "mult_vae", "label": "Mult-VAE", "params": {"lr": 0.003, "hidden_dims": [30], "epochs": 65, "patience": 10}},
     {"model": "gfcf", "label": "gfcf", "params": {}},
-    {"model": "lightgcn", "label": "GCN", "params": {"embedding_dim": 64, "layer_combination": "last"}}
+    {"model": "lightgcn", "label": "GCN", "params": {"epochs": 40, "embedding_dim": 64, "layer_combination": "last"}}
   ]
 }
