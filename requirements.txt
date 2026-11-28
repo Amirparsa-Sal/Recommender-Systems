@@ -4,5 +4,5 @@ pandas>=1.5
 scikit-learn>=1.2
 joblib>=1.2
 
-# Optional, only for the neural models (autoencoder, denoising_ae, mult_vae):
+# Optional, only for the neural models (autoencoder, denoising_ae, mult_vae, lightgcn):
 # torch>=2.0

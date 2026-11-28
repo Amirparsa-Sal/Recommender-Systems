@@ -13,7 +13,11 @@ features – and implements the methods of the course slides.
 
 ```bash
 pip install -r requirements.txt        # numpy, scipy, pandas, scikit-learn, joblib
+pip install torch                      # only for autoencoder / denoising_ae / mult_vae / lightgcn
 ```
+
+PyTorch is imported lazily: the rest of the project (including `ease`) works without it.
+Check the competition rules on allowed frameworks before submitting a neural model.
 
 Python 3.9+ is required. Put the three competition CSV files in `data/`
 (already done): `data_train.csv`, `data_target_users_test.csv`,
@@ -25,6 +29,8 @@ Python 3.9+ is required. Put the three competition CSV files in `data/`
 main.py                  CLI: list-models / evaluate / submit
 evaluate.py              compare many models or configs on the same split
 tune_blend.py            search the weights / subset of components of a hybrid_linear blend
+tune_gated_blend.py      do weights that depend on the profile length of the user beat one global blend? (hybrid_gated)
+analyze_models.py        which components agree / disagree usefully, and which pairs blend well (plots + CSV)
 experiments/example.json example comparison file (every model and variant)
 experiments/tune_blend.json example weight search for a blend
 data/                    competition CSV files
@@ -37,7 +43,7 @@ recsys/
   sampling.py            negative sampling (uniform / popularity)
   optim.py               sparse SGD / Adagrad updates
   experiment.py          split building, running and comparing models
-  blend_search.py        fast weight search for linear blends (used by tune_blend.py)
+  blend_search.py        fast weight search for linear blends (used by tune_blend.py, tune_gated_blend.py)
   cli.py                 argparse CLI (one sub-command per model, generated automatically)
   models/                one file per model family (see below; graph.py = graph-based models, hybrid.py = hybrids)
 ```
@@ -86,6 +92,7 @@ Evaluation-protocol flags (same for every model):
 | `--subsample-users` | `0` | smoke test on N random users (0 = all) |
 | `--rec-batch-size` | `1000` | users scored at once (lower it if memory is tight) |
 | `--output` | – | save the results table (with hyper-parameters) as CSV |
+| `--cache-dir` | off | save the trained model in this folder and load it in later runs (see [Model cache](#model-cache---cache-dir)) |
 | `-v` | off | debug logging |
 
 Model hyper-parameters are flags too: `python main.py evaluate <model> --help`
@@ -108,6 +115,30 @@ python main.py submit item_knn --topk 200 --shrink 20 --output submissions/item_
 | `--data-dir` | `data` | folder with the CSV files |
 | `--rec-batch-size` | `1000` | users scored at once |
 | `--save-model` | – | also pickle the trained model |
+| `--cache-dir` | off | reuse a model trained earlier with identical hyper-parameters (see [Model cache](#model-cache---cache-dir)) |
+
+### Model cache: `--cache-dir`
+
+`main.py evaluate`, `main.py submit` and `evaluate.py` accept `--cache-dir <folder>`
+(in the experiment file: `"cache_dir": "<folder>"`; the command line wins). The trained
+model is pickled there, and a later run with the same **model, hyper-parameters and
+data** (train and validation matrices; for `submit` the full data) loads it instead of
+training, which is useful to re-run with another `--cutoffs`, `--target-users-only`,
+`--rec-batch-size`, or to re-evaluate a long neural or EASE run. Changing any hyper-parameter,
+`--split-seed`, `--validation-fraction`, `--subsample-users` or the data trains a new
+model (the old file stays). `fit_s` in the results then shows the loading time.
+
+* Off by default. `evaluate` and `submit` do not share files, because they train on
+  different data.
+* Hybrids are not pickled as a whole; their own `--cache-dir` flag caches the components
+  (see [Hybrid models](#hybrid-models-part-12)), and `evaluate.py --cache-dir` hands the
+  folder to every hybrid that has none of its own.
+* `--device` and `--num-threads` are not part of the key, so a network
+  trained with `--device mps` is found again by a run (e.g. `analyze_models.py`) that
+  says `cpu`. Every other hyper-parameter, including `--seed`, `--epochs`, `--patience`,
+  must match exactly, so copy them into the experiment / analysis file.
+* Delete the folder after changing a model's code: the key does not include the code.
+* Dense `ease` is several GB on disk (use `--topk`), and cached models are not purged.
 
 Items already in a user's training history are never recommended; users without
 history receive the most popular items.
@@ -223,7 +254,14 @@ data_train.csv ── 80% ──> train        (what every model is fitted on)
 | `hybrid_linear` | Part 12 | weighted sum of the (normalised) scores of several models | `--components`, `--weights`, `--normalize` |
 | `hybrid_list` | Part 12 | merges the top-N lists of several models (round-robin, Borda, RRF) | `--components`, `--weights`, `--method`, `--list-size` |
 | `hybrid_pipeline` | Part 12 | each model's predictions are added to the URM that trains the next model | `--components`, `--top-n`, `--use-scores`, `--max-profile-size` |
+| `hybrid_gated` | Part 12 (extension) | linear blend whose weights depend on the profile length (number of training interactions) of the user | `--components`, `--bucket-edges`, `--bucket-weights`, `--normalize` |
 | `hybrid_merge` | Part 12 | merges the item-item matrices of item-based models into one model | `--components`, `--weights`, `--normalize`, `--topk` |
+| `ease` | Part 15 | EASE^R: closed-form item-item linear autoencoder, `S = I − P·diagMat(1⊘diag P)`, `P = (RᵀR+λI)⁻¹` | `--l2`, `--min-item-interactions`, `--topk`, `--dtype`, `--max-memory-gb` |
+| `autoencoder` | Part 15 | user-profile autoencoder (shallow / symmetric / deep, optional tied weights), BCE or MSE | `--hidden-dims`, `--activation`, `--tied-weights`, `--loss`, `--positive-weight`, `--device`, `--num-threads`, `--epochs`, `--batch-size`, `--lr`, `--optimizer`, `--dropout`, ... |
+| `denoising_ae` | Part 15 | the same autoencoder trained to rebuild the clean profile from a corrupted one | all `autoencoder` flags + `--noise-dropout`, `--noise-add` |
+| `mult_vae` | Part 15 | variational autoencoder with multinomial likelihood and KL annealing | `--hidden-dims`, `--latent-dim`, `--beta`, `--anneal-steps`, `--noise-dropout`, `--input-normalization`, `--device`, ... |
+| `gfcf` | Part 16 | GF-CF: normalised co-occurrence filter + ideal low-pass filter from a truncated SVD; no training loop | `--n-factors`, `--alpha`, `--linear-weight`, `--user-exponent`, `--item-exponent`, `--filter-power`, `--svd-solver`, `--topk` |
+| `lightgcn` | Part 16 | LightGCN: user / item embeddings smoothed over the user-item graph (no weights, no non-linearity), trained with BPR | `--embedding-dim`, `--n-layers`, `--layer-combination`, `--user-exponent`, `--item-exponent`, `--l2`, `--batch-size`, `--lr`, `--device`, `--num-threads`, `--propagation`, ... |
 | `p3alpha` | Part 14 | 3-hop walk as item-item similarity `S = P_IU·P_UI`, transitions raised to α (plain P3 at α=1) | `--alpha`, `--topk` |
 | `rp3beta` | Part 14 | P3-α with the destination item's popularity penalised by β | `--alpha`, `--beta`, `--topk` |
 
@@ -267,6 +305,152 @@ data_train.csv ── 80% ──> train        (what every model is fitted on)
   `--optimizer adagrad` (default) or plain `sgd`. Updates
   of repeated rows inside a mini-batch are summed first. All SGD learning rates and
   regularisation values are untuned starting points.
+
+### EASE and neural models (Part 15)
+
+Two-tower models are not implemented (they need side information); the graph
+convolution models are in the Part 16 sections below (GF-CF and LightGCN).
+
+* **`ease`** – closed form, no epochs and no early stopping. The dense `n×n` weight
+  matrix is built with one Cholesky inversion (LAPACK `potrf`/`potri`, in place), so the
+  memory is about `n²·4` bytes in `float32`: **~3 GB for the 27k items with at least 5
+  training interactions, ~4.9 GB for all 35k**, plus working space. `--min-item-interactions`
+  (default 5) drops rare items (they score 0); the guard `--max-memory-gb` (default 8)
+  refuses to start when the matrix would not fit. Fitting takes about 2.5 minutes on 2 CPU
+  threads. On the 80/20 split (min items 5, warm users) λ=30 / 100 / 400 gave NDCG@20
+  0.1265 / 0.1307 / 0.1274, so `--l2` defaults to 100; it is a strong single model next
+  to SLIM (0.132) in the same comparison. The dense model is several GB, so it is
+  not cached on disk by `hybrid_*` with `--cache-dir` unless you set `--topk K`: this
+  keeps the K largest-magnitude weights per target item, which makes the model small and
+  fast to score, picklable, and usable inside `hybrid_merge` (which needs an item-item
+  matrix). Without `--topk`, `ease` works in `hybrid_linear` / `hybrid_list` /
+  `hybrid_pipeline` but not in `hybrid_merge`.
+* **`autoencoder`** – input = the user's whole profile (a 0/1 vector over all items), output
+  = a score for every item; the loss is computed over all items, with `--positive-weight`
+  to up-weight the observed ones. `--hidden-dims 600` is a shallow autoencoder,
+  `--hidden-dims 600,200` a deep symmetric one (the decoder mirrors the encoder),
+  `--tied-weights` makes the decoder use the transposed encoder weights (about half the
+  parameters), and `--activation identity` with a single layer gives the linear model
+  of the slides. `--loss bce` (default) uses sigmoid outputs, `--loss mse` raw outputs.
+* **`denoising_ae`** – the same network, trained on a corrupted profile: every observed
+  interaction is removed with probability `--noise-dropout` (default 0.5) and every
+  missing one is switched on with probability `--noise-add` (default 1e-4, about 3 false
+  interactions per user); the target is always the clean profile. Scoring uses the clean profile.
+* **`mult_vae`** – encoder → mean/log-variance of a `--latent-dim` Gaussian → decoder with a
+  softmax over all items; loss = multinomial log-likelihood + β·KL. β grows linearly from
+  0 to `--beta` (default 0.2) over `--anneal-steps` updates (0 = constant β). Defaults
+  follow Liang et al. 2018: input dropout 0.5, l2-normalised input, tanh. `--hidden-dims`
+  may be empty (`[]`, linear encoder).
+* **Hardware flags** – `--device {auto,cpu,cuda,mps}` (default `cpu`; `auto` takes cuda,
+  then mps, then cpu; an unavailable device stops with a clear error) and
+  `--num-threads N` (0 = leave PyTorch's default). Pass JSON or comma lists for dimensions:
+  `--hidden-dims 600,200`, `--hidden-dims '[600]'`.
+* **Training flags** (shared by the three neural models) – `--epochs`, `--batch-size`,
+  `--lr`, `--optimizer {adam,adamw,sgd,adagrad}`, `--momentum` (sgd only),
+  `--weight-decay`, `--grad-clip` (0 = off), `--dropout` (hidden layers),
+  `--input-normalization {none,l2}`. Early stopping works like the other iterative
+  models: `--eval-every` (default 1), `--patience` (default 5), `--validation-users`;
+  the best epoch's weights are restored. `submit` trains for exactly `--epochs`
+  (see [Data split and early stopping](#data-split-and-early-stopping)).
+* **Scores** – the autoencoders output probabilities (sigmoid), `mult_vae` a softmax
+  distribution, `--loss mse` raw values. They are scaled very differently from
+  KNN/SLIM scores, which is what the `--normalize` option of `hybrid_linear` is for.
+* **Cost and caching** – a `--hidden-dims 600` network has about 2·35k·600 ≈ 42M
+  weights; expect tens of seconds to minutes per epoch on a laptop CPU, so start with
+  `--subsample-users` and a small `--hidden-dims` for smoke tests. Trained networks are
+  stored as CPU weights, so `--cache-dir` works for all three neural models.
+* Nothing is tuned on the real data: the defaults come from the slides and the VAE paper.
+  Tune `--lr`, `--hidden-dims`, the noise level and (VAE) `--beta` first.
+
+### GF-CF (Part 16)
+
+`gfcf` is the graph-filter model of the graph-convolution slides: no embeddings, no
+epochs, no early stopping, and no PyTorch. With the normalised URM `R^ = D_U^-a · R · D_I^-b`
+and its truncated SVD `R^ ≈ U_K Σ_K V_Kᵀ`, the scores are `r · S` with
+
+    S = linear_weight · R^ᵀR^  +  alpha · D_I^-b · V_K · V_Kᵀ · D_I^b
+
+(the first term is a co-occurrence filter, the second an ideal low-pass filter on the `K`
+strongest singular directions; the exponents of `D_I` have opposite signs).
+
+* **Speed and memory** – the SVD takes about 10 s for `--n-factors 512` (the randomized
+  solver; `--svd-solver arpack` is exact but about 5× slower) and scoring all validation
+  users about 25 s. The dense `items × items` matrix `S` is never built: scores come from
+  two sparse products plus the low-rank part, so the model is only `V_K` (about 150 MB) and
+  caches fine with `--cache-dir`.
+* **`--topk K`** builds `S` anyway, column block by column block, keeps the `K` largest
+  entries per item and scores with that sparse matrix. It takes about 75 s to build; it is
+  needed to use `gfcf` in `hybrid_merge` (which wants an item-item matrix). NDCG@20 on a
+  3000-user sample: 0.1338 exact, 0.1333 with `--topk 1000`, 0.1277 with `--topk 200`.
+* **Defaults differ from the paper** (`alpha 0.3`, exponents 0.5, `K 256`) because they were
+  tuned on the 80/20 split (warm users, NDCG@20, SLIM = 0.132 in the same comparison):
+
+  | setting | NDCG@20 |
+  |---|---|
+  | paper defaults (α 0.3, exponents 0.5/0.5, K 256) | 0.1237 |
+  | α 1 | 0.1253 |
+  | α 1, exponents 0.4/0.4 | 0.1325 |
+  | α 1, exponents 0.4/0.4, K 512 or 768 (default: 512) | 0.1342 |
+  | α 1, exponents 0.4/0.4, K 1024 | 0.1333 |
+
+  Exponents of 0.7 are much worse (about 0.10 on the 3000-user sample): they penalise
+  popular items too much. Differences below about 0.002 are noise.
+* **Tuning tips** – `--item-exponent` and `--user-exponent` matter most (try 0.3–0.5), then
+  `--alpha` (0.6–2 is flat) and `--n-factors`. `--filter-power` generalises the ideal filter
+  by weighting direction `k` with `(σ_k/σ_1)^p`; values from −1 to 1 made no clear
+  difference here. `--linear-weight 0` keeps only the low-pass term (lower: 0.1228 vs
+  0.1269 at α 1 on the sample), `--alpha 0` only the co-occurrence term (0.1083).
+
+### LightGCN (Part 16)
+
+`lightgcn` is the graph convolution network of the slides, in its light version. The only
+trainable parameters are one embedding per user and per item. A convolution layer replaces
+every embedding by the weighted mean of its neighbours' embeddings (weights `1/√(d_u·d_i)`,
+no feature transformation, no non-linearity, no self-connection); in matrix form
+`E^(k) = G^k · E^(0)`. The final embedding is the mean of the layers `0 … h`
+(`--layer-combination mean`, the paper) or the last layer only (`last`, the slides' `E^(h)`),
+the score is the dot product of user and item, and the loss is BPR with an L2 penalty on the
+embeddings in the batch. After training the model is two dense matrices: scoring needs no
+PyTorch, so it caches (`--cache-dir`) and loads on any device.
+
+* **Flags** – model: `--embedding-dim` (64), `--n-layers` (4; 0 = plain matrix
+  factorisation), `--layer-combination` (`mean`), `--user-exponent` / `--item-exponent`
+  (0.4 / 0.4; the edge weights are `D_U^-a · R · D_I^-b`, 0.5/0.5 is the paper),
+  `--init-std`. Loss: `--l2` (1e-4), `--negative-sampling {uniform,popularity}`.
+  Optimisation: `--epochs` (100), `--batch-size` (16384 triples), `--lr` (0.01),
+  `--optimizer`, `--momentum`, `--weight-decay`, `--grad-clip`. Hardware: `--device
+  {auto,cpu,cuda,mps}` (`cpu`), `--num-threads`, `--propagation {auto,sparse,scatter}`.
+  Early stopping as in the neural models: `--eval-every` 1, `--patience` 5, the best epoch is
+  restored; `submit` trains for exactly `--epochs`, so pass the best epoch of `evaluate`.
+* **Cost** – every training step propagates through the whole graph (about 400k edges), so
+  an epoch is 7–13 s on 2 CPU threads with `--batch-size 16384` (30 s with 4096, which is
+  why the default is large). The default run stops after about 35 epochs, 6–7 minutes.
+  `--propagation sparse` (cpu / cuda) uses sparse matrix products; `scatter` (gather +
+  scatter-add, chosen automatically on `mps`, which has no sparse tensors) works anywhere but is
+  about 5× slower and needs more memory. The `mps` path is tested only against the sparse path
+  on cpu, not on Apple hardware: if it fails, use `--device cpu`.
+* **Results** (80/20 split, NDCG@20) – full validation users with the defaults: **0.1240**
+  (GF-CF 0.1342, EASE 0.131, SLIM 0.132, BPR-MF 0.110 in the same comparison). Tuning on a
+  3000-user sample (differences below about 0.002 are noise):
+
+  | setting | NDCG@20 |
+  |---|---|
+  | 3 layers, exponents 0.5/0.5, lr 0.01, batch 16384 | 0.1200 |
+  | + lr 0.03 (peaks at epoch 25, then overfits) | 0.1146 |
+  | + exponents 0.4/0.4 | 0.1211 |
+  | + exponents 0.3/0.3 (overfits after 3 epochs) | 0.1071 |
+  | exponents 0.4/0.4, `--l2 0.001` | 0.1213 |
+  | exponents 0.4/0.4, 128 dims | no gain (peak 0.1186 vs 0.1187) |
+  | exponents 0.4/0.4, **4 layers (default)** | **0.1251** |
+  | exponents 0.4/0.4, 6 layers | worse (peak at epoch 23, 0.1178 on the validation sample vs 0.121 for 4) |
+
+* **Reading the numbers** – LightGCN trails the item-based models here (GF-CF, EASE, SLIM), as
+  expected for embedding models on a sparse dataset with a median profile of 13 items, but it
+  is the best of the embedding models. It is embedding-based, so its mistakes should differ from
+  theirs: check it with `analyze_models.py` and `hybrid_linear` (`--normalize` is needed, the scores
+  are raw dot products). Tune `--n-layers`, the two exponents, `--lr` and `--l2` first. If the
+  validation curve peaks early and then drops, the model is overfitting: lower `--lr` or raise
+  `--l2` / `--weight-decay`.
 
 ### Graph-based models (Part 14)
 
@@ -393,14 +577,94 @@ validation split can be slightly optimistic: repeat the best candidates with ano
 Not implemented: **co-training / S-SLIM** (slides 5), which learns one similarity from the URM
 and the item content matrix; it needs item features.
 
+#### Weights that depend on the profile length: `hybrid_gated` and `tune_gated_blend.py`
+
+With 5 known interactions a user gives little to go on, with 80 a lot, and the best model
+often differs (in a test with four components the user-based model won for profiles shorter
+than 6, GF-CF for longer ones). `hybrid_gated` is a `hybrid_linear` with one list of weights
+per profile-length bucket:
+
+```bash
+python main.py evaluate hybrid_gated --components @blend_components.json --normalize max \
+  --bucket-edges 5,10,20 --bucket-weights '[[0,1,0.5,0],[0.2,0,0,1],[0.1,0,0,1],[0.1,0,0,1]]'
+```
+
+`--bucket-edges 5,10,20` makes the buckets `<5`, `5-9`, `10-19` and `>=20` (the edges are the
+lower bounds of the next bucket), and `--bucket-weights` has one list of component weights per
+bucket. The profile length is the number of interactions in the data the model is trained on:
+`submit` trains on all the data (profiles about 1.25× longer than in `evaluate`), so multiply the
+edges by `1 / (1 - validation fraction)` there; `tune_gated_blend.py` prints both commands.
+
+`tune_gated_blend.py` tests whether the gating is worth it, without fooling itself. It takes the
+same `--config` / `--components` as `tune_blend.py` and the same `--cache-dir`, so no retraining:
+
+```bash
+python3 tune_gated_blend.py --config experiments/analyze_bests.json
+python3 tune_gated_blend.py --config experiments/analyze_bests.json --bucket-edges 5 10 20 50
+python3 tune_gated_blend.py --config experiments/analyze_bests.json --folds 5 --strategy grid
+```
+
+1. **Buckets** – validation users with at least one training interaction are cut into
+   `--n-buckets` (default 4) buckets of about equal size, or at your `--bucket-edges`; a bucket
+   with fewer than `--min-bucket-users` (500) users is merged with its smaller neighbour.
+2. **Per-bucket report** – NDCG@20 of every component in every bucket, the best component per
+   bucket, and what picking it per bucket would give.
+3. **Cross-validation** (`--folds`, default 2; 0 = skip) – the weights are tuned on the other
+   folds of users and evaluated on the held-out one, so every number is out-of-sample: best
+   single model, best single model per bucket, one global blend, one blend per bucket. The gain
+   of the per-bucket blend over the global one is printed with its paired standard error; below
+   about two standard errors it is noise. Small buckets (fewer than half of `--min-bucket-users`
+   users in a training fold) fall back to the global weights.
+4. **Final weights** tuned on all users, checked through the real `hybrid_linear` and
+   `hybrid_gated` models, and the `main.py evaluate` / `submit` commands to reproduce them.
+
+It writes `by_profile_length.png` (heat map: models and blends × buckets), `by_profile_length.csv`,
+`cv_summary.csv`, `weights.csv` and `gated_config.json` to `--out-dir` (default
+`results/gated_blend`). The weights are searched as in `tune_blend.py` (`--strategy coordinate`
+by default, which needs far fewer evaluations than `grid`; `--weight-values`, `--candidates`), with
+one `--normalize` (default `max`; the first entry if the file lists several).
+
+How to read it: in a test with item-KNN, user-KNN, RP3β and GF-CF (80/20 split, 4 buckets), the
+per-bucket blend beat the global blend by +0.0015 NDCG@20 out of sample (about five standard
+errors), almost all of it in the shortest bucket, and was only +0.0003 (noise) above simply
+choosing the best single model per bucket. Expect a small gain, not a jump: the per-bucket weights
+are tuned on fewer users, so with many components and few users per bucket they overfit; use fewer
+buckets, fewer components or a coarser `--weight-values`. Run time grows with the number of
+components, buckets and folds (about 4 minutes for that test, from a cold cache).
+
+#### Which components should be blended? `analyze_models.py`
+
+Takes the same `--config` / `--components` as `tune_blend.py` and the same `--cache-dir`, so no
+retraining. It writes heatmaps and CSV files to `--out-dir` (default `results/analysis`):
+
+```bash
+python3 analyze_models.py --config experiments/tune_blend.json
+python3 analyze_models.py --components @experiments/blend_components.json --max-users 5000
+```
+
+| Output | Question it answers |
+| --- | --- |
+| `score_correlation`, `overlap_at_20` | Do the models rank alike? Per-user Spearman on the items either model puts in its top-100, and the share of the top-20 in common. |
+| `ndcg_correlation` | Do they do well / badly on the same users? |
+| `unique_hits` | How many of model A's validation hits does model B miss (and vice versa)? |
+| `oracle_gain` | NDCG@20 gain if every user got the better of the two models; an upper bound that includes luck. |
+| `blend_gain` | Ground truth: best linear blend of the pair minus the better single model (weights and normalisation searched). |
+| `pairs.csv`, `summary.txt` | All of the above per pair, sorted by blend gain, with the standard error of the gain over users. |
+
+Rankings, overlaps and hit counts only depend on the order of the scores within a user, so they
+need no normalisation; the blend gain normalises per user like `hybrid_linear` (`--normalize`,
+default `max zscore`). Users without training interactions are left out. A gain below about two
+standard errors (`gain_vs_noise` in `pairs.csv`) is not distinguishable from noise, and the
+weights are picked on the same validation users, so confirm a promising pair with another
+`--split-seed` and `tune_blend.py`.
+
 ### What is not included, and why
 
 * Content-based filtering, hybrids and feature-aware models – no item features.
 * Best Rated, Global Effects, Pearson/adjusted cosine, SVD++ as a rating
   predictor, MAE/MSE evaluation – they need explicit ratings.
 * Sequence-aware models and time-based splits – no timestamps.
-* Autoencoders and two-tower models – left out on request (taxonomy boxes only in the
-  slides). Graph neural networks are not covered by the graph models above.
+* Two-tower models – left out on request.
 * Tripartite user-item-attribute graphs (Part 14) and co-training / S-SLIM (Part 12) – they need
   item or user attributes.
 

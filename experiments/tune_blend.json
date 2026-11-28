@@ -10,10 +10,10 @@
     {"model": "autoencoder", "label": "AE", "params": {"lr": 0.003, "hidden_dims": [30], "epochs": 100, "patience": 10, "device": "mps"}},
     {"model": "mult_vae", "label": "Mult-VAE", "params": {"lr": 0.003, "hidden_dims": [30], "epochs": 100, "patience": 10, "device": "mps"}},
     {"model": "gfcf", "label": "gfcf"},
-    {"model": "rwr", "label": "rwr", "params": {"damping": 0.2,"iterations": 10}}
+    {"model": "lightgcn", "label": "GCN", "params": {"embedding_dim": 64, "layer_combination": "last"}} 
   ],
 
-  "weight_values": [0, 0.1, 0.2, 0.3, 0.5],
+  "weight_values": [0, 0.1, 0.2, 0.3, 0.4],
   "normalize": ["max", "zscore"],
   "strategy": "grid",
   "top": 40

@@ -120,6 +120,24 @@ class CandidatePool:
         self._discounts = 1.0 / np.log2(np.arange(2, cutoff + 2))
         self._ideal_dcg = np.cumsum(self._discounts)[self._ideal_length - 1]
 
+    def subset(self, rows: Sequence[int], normalizations: Optional[Sequence[str]] = None) -> "CandidatePool":
+        """A pool restricted to some rows (users), optionally to some of the normalisations.
+
+        The result has the same interface (``per_user`` / ``evaluate``) and copies the selected
+        rows, so searches on a group of users (a bucket, a cross-validation fold) cost
+        proportionally less than on the whole pool.
+        """
+        rows = np.asarray(rows, dtype=np.int64)
+        names = list(normalizations) if normalizations else list(self.normalizations)
+        chosen = [self.normalizations.index(name) for name in names]
+        view = object.__new__(CandidatePool)
+        view.__dict__.update(self.__dict__)
+        view.normalizations = names
+        view.scores = self.scores[np.ix_(chosen, np.arange(self.n_models), rows)]
+        for attribute in ("valid", "relevant", "users", "items", "_ideal_length", "_ideal_dcg"):
+            setattr(view, attribute, getattr(self, attribute)[rows])
+        return view
+
     def per_user(self, weights: Sequence[float], normalization: str) -> Tuple[np.ndarray, np.ndarray]:
         """Per-user ``(ndcg@cutoff, ap@cutoff)`` arrays of the blend with these weights."""
         if len(weights) != self.n_models:

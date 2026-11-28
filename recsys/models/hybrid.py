@@ -343,6 +343,82 @@ class HybridLinear(_Hybrid):
         return total
 
 
+# ------------------------------------------------------- weights that depend on the profile length
+@dataclass
+class GatedConfig(LinearConfig):
+    bucket_edges: list = param(
+        [],
+        "Profile-length thresholds (number of training interactions of the user), JSON or comma "
+        "separated, increasing. [5,10,20,50] makes the buckets <5, 5-9, 10-19, 20-49 and >=50. "
+        "The profile length is measured on the data the model is trained on, so thresholds found "
+        "with `evaluate` should be divided by (1 - validation fraction) for `submit` "
+        "(tune_gated_blend.py prints both commands).",
+        json=True,
+    )
+    bucket_weights: list = param(
+        [],
+        "One list of component weights per bucket (len(bucket_edges) + 1 lists), JSON, e.g. "
+        "[[1,0,0],[1,0.5,0],[1,1,0.5]]. Empty = the same --weights for every user (hybrid_linear).",
+        json=True,
+    )
+
+    def validate(self) -> None:
+        super().validate()
+        n_components = len(parse_components(self.components))
+        edges = [float(e) for e in self.bucket_edges]
+        if any(e != int(e) or e < 1 for e in edges) or any(a >= b for a, b in zip(edges, edges[1:])):
+            raise ValueError(f"bucket_edges must be increasing whole numbers >= 1, got {self.bucket_edges}")
+        self.bucket_edges = [int(e) for e in edges]
+        if not self.bucket_weights:
+            if self.bucket_edges:
+                raise ValueError("bucket_edges were given without bucket_weights")
+            return
+        rows = self.bucket_weights
+        if not isinstance(rows, list) or any(not isinstance(row, (list, tuple)) for row in rows):
+            raise ValueError("bucket_weights must be a list of weight lists, one per bucket")
+        if len(rows) != len(self.bucket_edges) + 1:
+            raise ValueError(
+                f"{len(rows)} weight lists for {len(self.bucket_edges) + 1} buckets "
+                f"({len(self.bucket_edges)} edges)"
+            )
+        for row in rows:
+            if len(row) != n_components:
+                raise ValueError(f"every bucket needs {n_components} weights, got {list(row)}")
+            if any(not isinstance(w, (int, float)) or w < 0 for w in row) or sum(row) <= 0:
+                raise ValueError(f"bucket weights must be non-negative with a positive sum, got {list(row)}")
+        self.bucket_weights = [[float(w) for w in row] for row in rows]
+
+
+@register("hybrid_gated")
+class HybridGated(_Hybrid):
+    """Linear blend whose weights depend on how many interactions the user has.
+
+    ``r = sum_j w_{b(u),j} . normalise(r_j)`` where ``b(u)`` is the bucket of the user's profile
+    length.  Short profiles (little to go on) and long ones often favour different models.
+    """
+
+    Config = GatedConfig
+
+    def _fit(self, urm: sp.csr_matrix) -> None:
+        self._fit_components(urm)
+        rows = self.config.bucket_weights or [self.weights]
+        self._bucket_weights = np.asarray(rows, dtype=np.float32)
+        self._edges = np.asarray(self.config.bucket_edges, dtype=np.int64)
+
+    def _score(self, users: np.ndarray) -> np.ndarray:
+        seen = (self.urm[users] > 0).toarray()
+        profile = np.diff(self.urm.indptr)[users]
+        weights = self._bucket_weights[np.searchsorted(self._edges, profile, side="right")]  # (users, components)
+        total = np.zeros(seen.shape, dtype=np.float32)
+        for j, model in enumerate(self._models):
+            column = weights[:, j]
+            if not column.any():
+                continue
+            scores = np.asarray(model._score(users), dtype=np.float32)
+            total += column[:, None] * normalize_scores(scores, seen, self.config.normalize)
+        return total
+
+
 # ----------------------------------------------------------------------- list combination
 LIST_METHODS = ("round_robin", "borda", "rrf")
 

@@ -58,7 +58,7 @@ def _import_torch():
         import torch
     except ImportError as error:  # pragma: no cover - depends on the environment
         raise ImportError(
-            "The neural models (autoencoder, denoising_ae, mult_vae) need PyTorch: pip install torch"
+            "The neural models (autoencoder, denoising_ae, mult_vae, lightgcn) need PyTorch: pip install torch"
         ) from error
     return torch
 

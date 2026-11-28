@@ -12,6 +12,7 @@ from recsys.models.bpr_mf import BPRMF
 from recsys.models.autoencoder import Autoencoder, DenoisingAutoencoder, MultVAE
 from recsys.models.ease import EASE
 from recsys.models.gfcf import GFCF
+from recsys.models.lightgcn import LightGCN
 from recsys.models.graph import P3Alpha, RP3Beta, RandomWalk, RandomWalkWithRestart
 from recsys.models.hybrid import HybridLinear, HybridList, HybridMerge, HybridPipeline
 
@@ -31,6 +32,7 @@ __all__ = [
     "BPRMF",
     "EASE",
     "GFCF",
+    "LightGCN",
     "Autoencoder",
     "DenoisingAutoencoder",
     "MultVAE",
